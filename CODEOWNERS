@@ -1,0 +1,22 @@
+# Bkz. PROJECT_PLAN.md bol. 4-5 (gorev/sahiplik dokumu) ve acik issue'lar.
+# Bolusum GOKTURK ve GOKKALKAN ile ayni mantikta: guvenlik/risk cekirdegi
+# Cyber'de, platform/teslimat/hat DevOps'ta.
+
+# Varsayilan sahip
+*                       @fetihcakmak @uzunkubra50
+
+# Cyber (guvenlik cekirdegi) — NHI risk modeli, blast-radius, sahte NHI
+# Bu dizinler HENUZ YOK; GZ-A/GZ-B geldikce olusacak.
+/internal/risk/         @fetihcakmak
+/internal/nhi/          @fetihcakmak
+/docs/THREAT_MODEL.md   @fetihcakmak
+/docs/DECISIONS.md      @fetihcakmak
+
+# DevOps (platform/teslimat/hat)
+/deployments/           @uzunkubra50
+/migrations/            @uzunkubra50
+/.github/               @uzunkubra50
+/cmd/                   @uzunkubra50
+/internal/config/       @uzunkubra50
+/Makefile               @uzunkubra50
+/.golangci.yml          @uzunkubra50
