@@ -39,3 +39,45 @@ func TestLoad_AllPresent(t *testing.T) {
 		t.Errorf("cfg = %+v", cfg)
 	}
 }
+
+func TestLoad_DecoyCountDefault(t *testing.T) {
+	t.Setenv("DB_DSN", "postgres://x/y")
+	t.Setenv("DECOY_COUNT", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("beklenmeyen hata: %v", err)
+	}
+	if cfg.DecoyCount != 1 {
+		t.Errorf("DecoyCount = %d, istenen 1 (varsayilan ekim acik)", cfg.DecoyCount)
+	}
+}
+
+func TestLoad_DecoyCountExplicit(t *testing.T) {
+	t.Setenv("DB_DSN", "postgres://x/y")
+	for _, tc := range []struct {
+		raw  string
+		want int
+	}{{"0", 0}, {"3", 3}} {
+		t.Setenv("DECOY_COUNT", tc.raw)
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("DECOY_COUNT=%q: %v", tc.raw, err)
+		}
+		if cfg.DecoyCount != tc.want {
+			t.Errorf("DECOY_COUNT=%q -> %d, istenen %d", tc.raw, cfg.DecoyCount, tc.want)
+		}
+	}
+}
+
+// Bozuk deger SESSIZCE varsayilana dusmemeli: "ekim var" sanilirken
+// olmamasi (ya da tersi) operatoru yanilticidir.
+func TestLoad_DecoyCountInvalidFails(t *testing.T) {
+	t.Setenv("DB_DSN", "postgres://x/y")
+	for _, bad := range []string{"bir", "-1", "1.5"} {
+		t.Setenv("DECOY_COUNT", bad)
+		if _, err := Load(); err == nil {
+			t.Errorf("DECOY_COUNT=%q icin hata bekleniyordu", bad)
+		}
+	}
+}

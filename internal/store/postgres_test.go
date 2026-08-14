@@ -410,3 +410,79 @@ var (
 	_ nhitrap.Store   = (*Store)(nil)
 	_ inventory.Store = (*Store)(nil)
 )
+
+// --- ekim sorgulari (internal/seed) ---
+
+func TestCountDecoys_CountsOnlyDecoys(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	mustUpsert(t, s, uuidN(1), "service_account", "billing")
+	mustUpsert(t, s, uuidN(2), "token", "ci")
+	if err := s.Create(ctx, nhitrap.Identity{
+		ID: uuidN(3), NHIType: "service_account", Owner: "billing",
+		CreatedAt: time.Now().UTC(), IsDecoy: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.CountDecoys(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("tuzak sayisi = %d, istenen 1 (gercek kayitlar sayilmamali)", n)
+	}
+}
+
+// Ornekler GERCEK envanterden gelmeli: mevcut tuzaklardan ornek almak
+// ikinci tuzagi birincinin kopyasi yapardi.
+func TestProfileSamples_ExcludesDecoys(t *testing.T) {
+	s := setupStore(t)
+	ctx := context.Background()
+
+	mustUpsert(t, s, uuidN(1), "service_account", "billing")
+	if err := s.Create(ctx, nhitrap.Identity{
+		ID: uuidN(2), NHIType: "machine_identity", Owner: "TUZAK",
+		CreatedAt: time.Now().UTC(), IsDecoy: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	samples, err := s.ProfileSamples(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(samples) != 1 {
+		t.Fatalf("ornek sayisi = %d, istenen 1", len(samples))
+	}
+	if samples[0].Owner != "billing" {
+		t.Errorf("ornek = %+v, tuzak profili sizmis olabilir", samples[0])
+	}
+}
+
+func TestProfileSamples_RespectsLimit(t *testing.T) {
+	s := setupStore(t)
+
+	for i := 1; i <= 5; i++ {
+		mustUpsert(t, s, uuidN(i), "token", "ci")
+	}
+	samples, err := s.ProfileSamples(context.Background(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(samples) != 3 {
+		t.Errorf("ornek sayisi = %d, istenen 3 (limit)", len(samples))
+	}
+}
+
+func TestProfileSamples_EmptyInventoryReturnsNone(t *testing.T) {
+	s := setupStore(t)
+	samples, err := s.ProfileSamples(context.Background(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(samples) != 0 {
+		t.Errorf("bos envanterde %d ornek dondu", len(samples))
+	}
+}

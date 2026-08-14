@@ -8,6 +8,9 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
+
+	"github.com/GokturkFK/gokzincir/internal/seed"
 )
 
 // Config, çekirdek boot için gereken minimum ayardır.
@@ -15,6 +18,9 @@ type Config struct {
 	HTTPAddr string
 	DBDSN    string
 	NATSURL  string
+	// DecoyCount, envantere ekilecek sahte NHI sayısıdır (bkz.
+	// internal/seed). 0 = ekim kapalı.
+	DecoyCount int
 }
 
 // Load, ortam değişkenlerinden Config üretir. DB_DSN zorunludur.
@@ -34,5 +40,27 @@ func Load() (Config, error) {
 		natsURL = "nats://localhost:4222"
 	}
 
-	return Config{HTTPAddr: addr, DBDSN: dsn, NATSURL: natsURL}, nil
+	decoys, err := decoyCount()
+	if err != nil {
+		return Config{}, err
+	}
+
+	return Config{HTTPAddr: addr, DBDSN: dsn, NATSURL: natsURL, DecoyCount: decoys}, nil
+}
+
+// decoyCount, DECOY_COUNT'u çözer.
+//
+// Geçersiz bir değer SESSİZCE varsayılana düşmez, hata döner: "DECOY_COUNT=bir"
+// yazan bir operatör tuzağın ekildiğini sanırdı; sessiz düşüş burada
+// "koruma var sanılırken yok" demek olurdu.
+func decoyCount() (int, error) {
+	raw := os.Getenv("DECOY_COUNT")
+	if raw == "" {
+		return seed.DefaultCount, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("config: DECOY_COUNT negatif olmayan bir tamsayi olmali, gelen: %q", raw)
+	}
+	return n, nil
 }

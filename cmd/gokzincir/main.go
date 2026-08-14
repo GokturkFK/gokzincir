@@ -33,6 +33,7 @@ import (
 	"github.com/GokturkFK/gokzincir/internal/correlator"
 	"github.com/GokturkFK/gokzincir/internal/inventory"
 	"github.com/GokturkFK/gokzincir/internal/nhitrap"
+	"github.com/GokturkFK/gokzincir/internal/seed"
 	"github.com/GokturkFK/gokzincir/internal/store"
 	_ "github.com/lib/pq"
 )
@@ -75,13 +76,22 @@ func main() {
 	engine := correlator.New(st)
 	decoder := nhitrap.NewDecoder(st, newUUIDv4)
 
+	// Tuzak ekimi (GÖKTÜRK OPS-11 muadili). nhitrap.Provider'i CAGIRAN
+	// kimse yoktu: tuzak uretebilen kod vardi ama calisan uründe hicbir
+	// zaman bir tuzak olusmuyordu. Ekim envanter geldikce kendiliginden
+	// olur (bkz. internal/seed) ve tuzagin id'si HICBIR API yanitinda
+	// donmez — yalnizca operator log'una yazilir.
+	profiles := seed.NewProfiles(nil)
+	seeder := seed.New(st, profiles, nhitrap.NewProvider(st, profiles, newUUIDv4, nil), cfg.DecoyCount)
+	ensureDecoys(context.Background(), seeder, logger)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 	api.New(st, logger).Routes(mux)
-	mux.HandleFunc("POST /api/v1/inventory", handleIngest(ingester, logger))
+	mux.HandleFunc("POST /api/v1/inventory", handleIngest(ingester, seeder, logger))
 	mux.HandleFunc("POST /api/v1/nhi-usage", handleUsage(decoder, engine, logger))
 
 	srv := &http.Server{
@@ -118,7 +128,7 @@ func main() {
 }
 
 // handleIngest, envanter toplama turunun yazma ucudur (GZ0-2).
-func handleIngest(in *inventory.Ingester, logger *slog.Logger) http.HandlerFunc {
+func handleIngest(in *inventory.Ingester, seeder *seed.Seeder, logger *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		res, err := in.IngestJSON(r.Context(), r.Body)
 		if err != nil {
@@ -128,7 +138,30 @@ func handleIngest(in *inventory.Ingester, logger *slog.Logger) http.HandlerFunc 
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()}, logger)
 			return
 		}
+		// Ekim envanter turunun ARDINDAN denenir: tuzak, benzeyecegi
+		// gercek kayitlar yazildiktan sonra o dagilimdan uretilir.
+		// Idempotent oldugu icin her turda cagrilmasi zararsiz.
+		ensureDecoys(r.Context(), seeder, logger)
 		writeJSON(w, http.StatusOK, res, logger)
+	}
+}
+
+// ensureDecoys, ekim denemesini yapar ve sonucu log'lar.
+//
+// Hata envanter yanitini BOZMAZ: ekim, envanterin yazilmasindan bagimsiz
+// bir yan istir; DB gecici olarak ekim sorgusunu reddettiginde istemcinin
+// gecerli envanter turunu 500 ile geri almasi yanlis olurdu.
+// Ekilen tuzagin id'si YALNIZCA buraya (operator log'una) yazilir: hicbir
+// okuma ucu tuzaklari dondurmez (store.Identities decoy'lari haric tutar),
+// yoksa "envanterde ayirt edilemez durma" tezini panelin kendisi bozardi.
+func ensureDecoys(ctx context.Context, seeder *seed.Seeder, logger *slog.Logger) {
+	planted, err := seeder.Ensure(ctx)
+	if err != nil {
+		logger.Error("tuzak ekimi basarisiz", "err", err)
+		return
+	}
+	for _, id := range planted {
+		logger.Info("sahte NHI ekildi", "nhi_id", id)
 	}
 }
 
