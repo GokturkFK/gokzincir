@@ -41,8 +41,15 @@ jobs:
       - name: Build
         run: go build ./...
 
+      # DB_DSN acikca veriliyor: testlerin YEREL varsayilani compose'daki
+      # 5434 portu (GOKTURK/GOKKALKAN ile cakismasin diye kaydirilmisti),
+      # CI servisi ise 5432'de. internal/store testleri CI'da ATLANMAZ,
+      # patlar (bkz. skipOrFail) — sessizce atlanan bir kalicilik testi
+      # CI'yi yaniltir.
       - name: Test (race detector, all packages)
         run: go test -race ./...
+        env:
+          DB_DSN: postgres://gokzincir:gokzincir@localhost:5432/gokzincir?sslmode=disable
 
       # Kapsam kapisi bilincli olarak yalnizca ./internal/... uzerinde
       # (gokkalkan ile ayni desen, orada bir CI duzeltmesiyle ogrenildi):
@@ -51,6 +58,8 @@ jobs:
       # sekilde dusurur.
       - name: Coverage (core packages only)
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./internal/...
+        env:
+          DB_DSN: postgres://gokzincir:gokzincir@localhost:5432/gokzincir?sslmode=disable
 
       - name: Coverage gate (>= 70% on core packages)
         run: |
