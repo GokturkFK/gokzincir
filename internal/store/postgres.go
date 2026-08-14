@@ -17,6 +17,7 @@ import (
 	"github.com/GokturkFK/gokturk-core/trap"
 	"github.com/GokturkFK/gokzincir/internal/inventory"
 	"github.com/GokturkFK/gokzincir/internal/nhitrap"
+	"github.com/GokturkFK/gokzincir/internal/seed"
 )
 
 // Store, Postgres üzerinde çalışan kalıcılık katmanıdır.
@@ -74,6 +75,49 @@ func (s *Store) FindByID(ctx context.Context, nhiID string) (*nhitrap.Identity, 
 	id.Scope = scope.String
 	id.SecretRefHash = secretRef.String
 	return &id, nil
+}
+
+// CountDecoys, seed.Store sözleşmesini karşılar: ekili tuzak sayısı.
+// Ekimin idempotent olması buna dayanır.
+func (s *Store) CountDecoys(ctx context.Context) (int, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT count(*) FROM nhi_identities WHERE is_decoy`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: tuzak sayisi okunamadi: %w", err)
+	}
+	return n, nil
+}
+
+// ProfileSamples, seed.Store sözleşmesini karşılar: ekilecek tuzağın
+// benzeyeceği GERÇEK envanter profilleri.
+//
+// is_decoy = false şart: mevcut tuzaklardan örnek almak, ikinci tuzağı
+// birincinin kopyası yapar ve zamanla envanterde birbirinin aynısı bir
+// tuzak kümesi oluştururdu — tam olarak göze batması istenmeyen şey.
+func (s *Store) ProfileSamples(ctx context.Context, limit int) ([]seed.Sample, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT type, owner, COALESCE(scope, '')
+		   FROM nhi_identities
+		  WHERE NOT is_decoy
+		  ORDER BY created_at DESC
+		  LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store: profil ornekleri okunamadi: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []seed.Sample
+	for rows.Next() {
+		var sm seed.Sample
+		if err := rows.Scan(&sm.NHIType, &sm.Owner, &sm.Scope); err != nil {
+			return nil, fmt.Errorf("store: profil ornegi cozulemedi: %w", err)
+		}
+		out = append(out, sm)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: profil ornekleri okunamadi: %w", err)
+	}
+	return out, nil
 }
 
 // --- envanter (GZ0-2) ---

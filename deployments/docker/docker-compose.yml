@@ -33,10 +33,26 @@ services:
       timeout: 3s
       retries: 10
 
-  # GZ0-1 iskeleti: sadece boot + /healthz. NHI envanteri/graph/blast-radius
-  # (GZ-A, GZ-B, GZ-C) geldikce bu servis onlarin uzerine oturacak; simdilik
-  # yalnizca altyapinin (nats+postgres) uzerine saglikli bir bos binary
-  # ayaga kalkiyor.
+  # Tek seferlik: semayi uygular ve cikar. Uygulama bunun BASARIYLA
+  # bitmesini bekler (service_completed_successfully) — yoksa gokzincir
+  # semasiz bir DB'ye baglanip her sorguda patlardi.
+  migrate:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gokzincir}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gokzincir}
+      POSTGRES_DB: ${POSTGRES_DB:-gokzincir}
+    volumes:
+      - ../../migrations:/migrations:ro
+      - ./migrate.sh:/migrate.sh:ro
+    entrypoint: ["/bin/sh", "/migrate.sh"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # NHI envanteri, graph/blast-radius, tuzak ekimi ve korelasyon tek
+  # binary'de (bkz. cmd/gokzincir).
   gokzincir:
     build:
       context: ../../
@@ -45,6 +61,10 @@ services:
       DB_DSN: postgres://${POSTGRES_USER:-gokzincir}:${POSTGRES_PASSWORD:-gokzincir}@postgres:5432/${POSTGRES_DB:-gokzincir}?sslmode=disable
       NATS_URL: nats://nats:4222
       HTTP_ADDR: ":8100"
+      # Ekilecek sahte NHI sayisi (bkz. internal/seed). Ekim ilk envanter
+      # turundan SONRA olur — tuzak benzeyecegi kayitlarin dagilimindan
+      # uretilir. 0 = ekim kapali.
+      DECOY_COUNT: ${DECOY_COUNT:-1}
     ports:
       - "8100:8100"
     depends_on:
@@ -52,6 +72,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "/gokzincir", "healthcheck"]
       interval: 5s

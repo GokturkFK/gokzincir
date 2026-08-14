@@ -1,0 +1,5 @@
+# Kabuk betikleri ve migration'lar Linux konteynerine mount ediliyor.
+# Windows'ta core.autocrlf=true ile checkout edilirlerse CRLF olur ve
+# konteynerdeki /bin/sh bunlari "\r: not found" ile reddeder.
+*.sh text eol=lf
+*.sql text eol=lf
