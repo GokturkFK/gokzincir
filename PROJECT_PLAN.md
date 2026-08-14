@@ -84,6 +84,12 @@ Netleşmesi gerekenler:
 > Bu kararlar `docs/DECISIONS.md`'ye yazılır ve **Cyber onaylayınca** kesinleşir
 > (GÖKKALKAN'da GK-S0 böyle yürüdü). Onaylanmadan GZ-A/GZ-B kod yazımı başlamaz.
 
+> **Somut öneri hazır:** [docs/DECISIONS.md](docs/DECISIONS.md) — NHI modeli,
+> tek-tip yönlü erişim kenarı, sınırlı-derinlik BFS blast-radius, teknik
+> eşlemesi `T1078.004` (MITRE ATT&CK'ten doğrulanmış) ve sahte NHI şeması
+> taslağı. @fetihcakmak onaylayınca kesinleşir (issue #1); değişirse o
+> dosya güncellenir.
+
 ---
 
 ## 4. Görevler — CYBER (güvenlik çekirdeği)
