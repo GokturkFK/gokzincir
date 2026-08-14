@@ -103,7 +103,7 @@ func TestProvider_Provision_NilIDFn(t *testing.T) {
 
 func TestDecoder_Decode_TripDetected(t *testing.T) {
 	store := newFakeStore()
-	_ = store.Create(context.Background(), Identity{ID: "nhi-3", Owner: "billing-team", CreatedAt: time.Now()})
+	_ = store.Create(context.Background(), Identity{ID: "nhi-3", Owner: "billing-team", CreatedAt: time.Now(), IsDecoy: true})
 
 	d := NewDecoder(store, fixedID("evt-1"))
 
@@ -118,6 +118,57 @@ func TestDecoder_Decode_TripDetected(t *testing.T) {
 	}
 	if ev.EventID != "evt-1" || ev.TrapID != "nhi-3" || ev.Source != "attacker-agent" || ev.Sensor != "nhi-access-log" {
 		t.Errorf("TripEvent alanlari beklenmedik: %+v", ev)
+	}
+}
+
+// Envanterde KAYITLI, gerçek (tuzak olmayan) bir NHI'nin meşru kullanımı
+// hiçbir event üretmemeli.
+//
+// Bu, aşağıdaki testin göremediği durumdur: orada store BOŞ olduğu için
+// ErrNotATrip zaten "kayıt bulunamadı"dan geliyordu. Gerçek sistemde
+// nhi_identities envanterin TAMAMINI tutar (GZ0-2 hattı gerçek kayıtları
+// yazar) — yani "bulundu" ile "tuzak" aynı şey değildir. Bu ayrım
+// olmadan her meşru NHI kullanımı alarm üretiyordu (ölçüldü).
+func TestDecoder_Decode_RealNHIInInventoryIsNotATrip(t *testing.T) {
+	store := newFakeStore()
+	// Envanter hattinin (GZ0-2) yazdigi GERCEK bir servis hesabi:
+	_ = store.Create(context.Background(), Identity{
+		ID: "real-sa-42", Owner: "billing-team", NHIType: "service_account",
+		CreatedAt: time.Now(), IsDecoy: false,
+	})
+
+	d := NewDecoder(store, fixedID("evt-fp"))
+
+	usage := Usage{NHIID: "real-sa-42", AccessedBy: "legit-service", ObservedAt: time.Now()}
+	line, _ := json.Marshal(usage)
+	obs := trap.RawObservation{Sensor: "nhi-access-log", Line: string(line), ObservedAt: usage.ObservedAt}
+
+	ev, err := d.Decode(obs)
+	if !errors.Is(err, trap.ErrNotATrip) {
+		t.Fatalf("gercek NHI icin ErrNotATrip bekleniyordu, geldi: %v", err)
+	}
+	if ev != nil {
+		t.Errorf("yanlis-pozitif: event uretilmemeliydi, geldi: %+v", ev)
+	}
+}
+
+// Provision edilen tuzak GERCEKTEN is_decoy=true yazilmali; aksi halde
+// Decoder onu hic tetikleyemez (nhi_identities.is_decoy varsayilani false).
+func TestProvider_Provision_MarksIdentityAsDecoy(t *testing.T) {
+	store := newFakeStore()
+	profiles := fakeProfiles{nhiType: "service_account", owner: "o", scope: "s"}
+	p := NewProvider(store, profiles, fixedID("nhi-decoy"), fixedTime(time.Now()))
+
+	if _, _, err := p.Provision(context.Background(), "soc"); err != nil {
+		t.Fatalf("beklenmeyen hata: %v", err)
+	}
+
+	stored, err := store.FindByID(context.Background(), "nhi-decoy")
+	if err != nil {
+		t.Fatalf("store'a yazilmamis: %v", err)
+	}
+	if !stored.IsDecoy {
+		t.Error("provision edilen kayit IsDecoy=true olmaliydi")
 	}
 }
 
