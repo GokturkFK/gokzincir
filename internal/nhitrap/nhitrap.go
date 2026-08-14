@@ -26,8 +26,9 @@ import (
 // GÖKTÜRK'teki TypeCredentialCanary'nin muadili).
 const TypeDecoyNHI = "decoy_nhi"
 
-// Identity, sahte bir NHI kaydıdır — nhi_identities şemasına
-// (migrations/00002) uygun, is_decoy=true.
+// Identity, bir NHI kaydıdır — nhi_identities şemasına (migrations/00002)
+// uygun. Tablo hem GERÇEK envanteri hem tuzakları tutar (docs/DECISIONS.md
+// Karar 5: ayrı bir decoy tablosu yok), bu yüzden ayrımı IsDecoy taşır.
 type Identity struct {
 	ID            string
 	NHIType       string // "service_account" / "token" / "machine_identity"
@@ -35,6 +36,14 @@ type Identity struct {
 	Scope         string
 	SecretRefHash string
 	CreatedAt     time.Time
+	// IsDecoy, bu satırın GZ-B1'in ektiği bir tuzak olup olmadığıdır
+	// (nhi_identities.is_decoy). Decoder YALNIZCA bu alanı true olan
+	// kayıtlar için TripEvent üretir — gerçek envanter kayıtlarının meşru
+	// kullanımı hiçbir şey tetiklemez (sıfır-FP).
+	//
+	// Alan hiçbir API/panel çıktısına sızmaz (docs/DECISIONS.md Karar 1);
+	// okuma uçları bunu döndürmez, yalnızca bu paket ve iç sorgular bakar.
+	IsDecoy bool
 }
 
 // Store, nhi_identities tablosuna erişimi soyutlar. Gerçek Postgres
@@ -95,6 +104,10 @@ func (p *Provider) Provision(ctx context.Context, createdBy string) (*trap.Trap,
 		Owner:     owner,
 		Scope:     scope,
 		CreatedAt: now,
+		// Tuzak olarak isaretlenmesi ZORUNLU: nhi_identities.is_decoy
+		// varsayilani false, isaretlenmezse ekilen tuzak gercek envanter
+		// kaydindan ayirt edilemez ve Decoder onu hic tetikleyemezdi.
+		IsDecoy: true,
 	}
 
 	if err := p.store.Create(ctx, identity); err != nil {
@@ -163,6 +176,16 @@ func (d *Decoder) Decode(obs trap.RawObservation) (*trap.TripEvent, error) {
 		}
 		return nil, fmt.Errorf("nhitrap: store sorgusu basarisiz: %w", err)
 	}
+
+	// nhi_identities hem GERCEK envanteri hem tuzaklari tutar
+	// (docs/DECISIONS.md Karar 5). Kimligin sadece BULUNMUS olmasi bir
+	// tetiklenme degildir — yalnizca tuzaga dokunulmasi TripEvent uretir.
+	// Bu kontrol olmadan envanterdeki her gercek NHI'nin mesru kullanimi
+	// alarm uretirdi (bkz. TestDecoder_Decode_RealNHIInInventoryIsNotATrip).
+	if !identity.IsDecoy {
+		return nil, trap.ErrNotATrip
+	}
+
 	raw, err := json.Marshal(usage)
 	if err != nil {
 		return nil, fmt.Errorf("nhitrap: raw marshal hatasi: %w", err)
