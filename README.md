@@ -88,6 +88,35 @@ make lint      # golangci-lint
 make vet
 ```
 
+### Migrations
+
+With Compose nothing manual is needed (the `migrate` service above). To run from the host, `goose` is required:
+
+```sh
+make migrate-up
+make migrate-down
+```
+
+Both paths share the same version table (`goose_db_version`) and never double-apply. `00001_init.sql` intentionally contains only `trip_events` / `alerts` (identical to the `gokturk-core` schema); `00002_nhi.sql` adds the NHI/graph tables (`nhi_identities`, `nhi_edges`) after the Sprint 0 decision.
+
+---
+
+## v0.1 Definition of Done
+
+| # | Item | Status |
+| :---: | :--- | :--- |
+| 1 | Inventory + relationship graph can be built | ✅ `scripts/demo.sh` step 1 |
+| 2 | Blast radius readable from the API | ✅ step 2 |
+| 3 | Decoy NHI usage → alert in ≤5 s | ✅ step 4 (instant) |
+| 4 | Legitimate NHI usage → no alert | ✅ step 3 |
+| 5 | `go test -race` green, coverage ≥ 70% | ✅ 83.5% in CI |
+| 6 | README + threat model + demo GIF | threat model ✅, GIF [#4](../../issues/4) |
+| 7 | CI can block PRs | ✅ branch protection enabled |
+
+## Branch & PR Rules
+
+`main` is protected: no direct pushes, PR + green CI required, squash-only merges.
+
 ---
 
 ## Göktürk Security Platform
