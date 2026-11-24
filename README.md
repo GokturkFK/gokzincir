@@ -2,66 +2,48 @@
 
 # GÖKZİNCİR
 
-**Non-Human Identity (NHI) Governance & Blast-Radius Graph (Göktürk Platform P3)**
+**İnsan-Olmayan Kimlik (NHI) Yönetişimi ve Blast-Radius Grafiği (Göktürk Platform P3)**
 
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Graph%20%26%20Events-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
-[![Coverage](https://img.shields.io/badge/Test%20Coverage-83.5%25-22c55e?style=flat-square)](https://github.com/GokturkFK/gokzincir)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Graf%20%26%20Olaylar-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Coverage](https://img.shields.io/badge/Test%20Kapsam%C4%B1-%2583.5-22c55e?style=flat-square)](https://github.com/GokturkFK/gokzincir)
 [![MITRE ATT&CK](https://img.shields.io/badge/MITRE%20ATT%26CK-T1078.004-C7252B?style=flat-square)](docs/THREAT_MODEL.md)
 [![Org](https://img.shields.io/badge/Org-GokturkFK-0d1117?style=flat-square)](https://github.com/GokturkFK)
 
-*Inventory service accounts, tokens, and machine identities, map their true blast radius upon compromise, and seed indistinguishable decoy NHIs that trigger Critical zero-FP alerts the instant an attacker moves laterally.*
+*Servis hesapları, token'lar ve makine kimliklerinin envanterini çıkarın; ele geçirilme hâlindeki gerçek hasar yüzeyini (blast radius) haritalayın ve ayırt edilemeyen sahte NHI tuzaklarıyla yanal hareketi anında sıfır yanlış pozitif ile yakalayın.*
+
+**🇹🇷 Türkçe** · [🇬🇧 English](#-english)
 
 </div>
 
 ---
 
-## Overview
+## Genel Bakış
 
-**GÖKZİNCİR** is Pillar 3 (P3) of the Göktürk Security Platform. It combines **Non-Human Identity (NHI) visibility** with **active deception**:
-- **Blast-Radius Graph:** Maps machine identities (`nhi_identities`) and permission/access relationships (`nhi_edges`) so security teams know exactly what a compromised service account can reach.
-- **Stealth Decoy NHI Seeding:** Automatically plants realistic decoy identities (`DECOY_COUNT`, default `1`) **after** the initial inventory pass, sampling distributions from real inventory so decoys blend in seamlessly.
-- **Zero-FP Detection:** Legitimate service-account usage generates zero noise; touching a decoy NHI triggers an instant `T1078.004` **Critical** alert via [`gokturk-core`](https://github.com/GokturkFK/gokturk-core), with repeat touches merged into a single campaign.
+**GÖKZİNCİR**, Göktürk Güvenlik Platformu'nun 3. sütunudur (P3). **İnsan-olmayan kimlik (NHI) görünürlüğünü** **aktif aldatma (deception)** ile birleştirir:
 
-> **Stealth Guarantee:** Decoy IDs are **never** returned by any read API (`GET /api/v1/nhi` omits decoys and secret digests); they are logged exclusively to operator logs (`"msg":"sahte NHI ekildi"`), preserving indistinguishability even if an attacker inspects API responses.
+- **Blast-Radius Grafiği:** Makine kimliklerini (`nhi_identities`) ve erişim/yetki kenarlarını (`nhi_edges`) haritalayarak ele geçirilen bir servis hesabının gerçekte nereye ulaşabileceğini görünür kılar.
+- **Gizli Sahte NHI Ekimi:** İlk envanter turundan **sonra** gerçek dağılımdan örnekleyerek otomatik sahte kimlikler (`DECOY_COUNT`, varsayılan `1`) eker.
+- **Sıfır-FP Tespit:** Meşru servis hesabı kullanımı hiç alarm üretmez; sahte bir NHI'ya dokunulduğu anda [`gokturk-core`](https://github.com/GokturkFK/gokturk-core) üzerinden `T1078.004` / **Critical** alarm oluşur ve tekrar denemeler tek kampanyada birleşir.
 
----
-
-## Architecture
-
-```mermaid
-flowchart TB
-    Sources["NHI Sources<br/>Service Accounts · Tokens · Machine Keys"] -->|"POST /api/v1/inventory"| Inv["Inventory Pipeline<br/>Idempotent Ingestion"]
-    Inv --> PG[("PostgreSQL<br/>nhi_identities · nhi_edges<br/>trip_events · alerts")]
-
-    PG --> Graph["Blast-Radius Engine<br/>Reachability & Risk Scoring"]
-    PG --> Decoy["Decoy NHI Provider<br/>Distribution-Matched Seeding"]
-
-    Usage["POST /api/v1/nhi-usage"] --> Decoy
-    Decoy -->|"TripEvent (T1078.004)"| Core["gokturk-core<br/>correlate.Evaluate"]
-    Core --> PG
-
-    Graph --> API["Read API<br/>/api/v1/nhi · /blast-radius · /alerts"]
-    PG --> API
-    API -->|"ALERT_SOURCES federation"| SOC["Göktürk Unified SOC Dashboard"]
-```
+> **Gizlilik Garantisi:** Sahte NHI kimlikleri hiçbir okuma API'sinde (`GET /api/v1/nhi`) dönmez; yalnızca operatör log'una yazılır (`"msg":"sahte NHI ekildi"`). Böylece saldırgan envanter API'sini inceleyerek tuzakları ayırt edemez.
 
 ---
 
 ## HTTP API
 
-| Endpoint | Purpose |
+| Uç | İşlev |
 | :--- | :--- |
-| `GET /healthz` | Liveness / health check |
-| `GET /api/v1/alerts` | Alerts feed — **identical wire contract** to GÖKTÜRK (P1) and GÖKKALKAN (P2) |
-| `GET /api/v1/nhi` | NHI inventory (decoys and secret digests are strictly omitted) |
-| `GET /api/v1/nhi/{id}/blast-radius` | Reachability graph & blast-radius score (visibility only, no alert) |
-| `POST /api/v1/inventory` | Idempotent inventory ingestion round |
-| `POST /api/v1/nhi-usage` | NHI usage observation; routes decoy touches into correlation |
+| `GET /healthz` | Sağlık kontrolü |
+| `GET /api/v1/alerts` | Alarmlar — GÖKTÜRK (P1) ve GÖKKALKAN (P2) ile **birebir aynı** sözleşme |
+| `GET /api/v1/nhi` | NHI envanteri (tuzaklar ve sır özetleri dönmez) |
+| `GET /api/v1/nhi/{id}/blast-radius` | Erişim grafiği ve hasar yüzeyi skoru (salt görünürlük, alarm üretmez) |
+| `POST /api/v1/inventory` | Idempotent envanter toplama turu |
+| `POST /api/v1/nhi-usage` | NHI kullanım gözlemi; tuzaksa korelasyona yönlendirilir |
 
-### Connecting to the Unified Göktürk SOC Panel
+### Birleşik Göktürk SOC Paneline Bağlama
 
-No dashboard code changes are needed—simply add GÖKZİNCİR as a third alert source:
+Panelde kod değişikliği gerekmeden `ALERT_SOURCES` üzerinden üçüncü kaynak olarak eklenir:
 
 ```sh
 ALERT_SOURCES="GÖKTÜRK=http://control-api:8080,GÖKZİNCİR=http://host.docker.internal:8100"
@@ -69,67 +51,80 @@ ALERT_SOURCES="GÖKTÜRK=http://control-api:8080,GÖKZİNCİR=http://host.docker
 
 ---
 
-## Quickstart & End-to-End Demo
+## Hızlı Başlangıç ve Uçtan Uca Demo
 
 ```sh
 cp deployments/docker/.env.example deployments/docker/.env
-make docker-up          # in a separate terminal (Postgres :5434, NATS :4224/8224)
-./scripts/demo.sh       # runs inventory -> blast-radius -> benign usage (0 alerts) -> decoy touch (Critical)
+make docker-up          # ayrı terminalde (Postgres :5434, NATS :4224/8224)
+./scripts/demo.sh       # envanter -> blast-radius -> meşru kullanım (0 alarm) -> sahte NHI (Critical)
 ```
 
-> Ports are offset from P1 (5432) and P2 (5433) so all three Göktürk pillars can run simultaneously on a single machine. Database migrations run automatically via the one-shot Compose `migrate` service (`goose_db_version`).
+> Portlar P1 (5432) ve P2 (5433) ile çakışmayacak şekilde ayarlanmıştır; üç sütun aynı makinede eşzamanlı çalışabilir. Migration'lar Compose içindeki tek seferlik `migrate` servisiyle otomatik uygulanır (`goose_db_version`).
 
-### Development & Testing
+### Geliştirme, Test ve Migration
 
 ```sh
 make build     # go build ./...
-make test      # go test -race ./... (83.5% coverage in CI)
+make test      # go test -race ./... (CI'da %83.5 kapsam)
 make lint      # golangci-lint
 make vet
-```
-
-### Migrations
-
-With Compose nothing manual is needed (the `migrate` service above). To run from the host, `goose` is required:
-
-```sh
 make migrate-up
 make migrate-down
 ```
-
-Both paths share the same version table (`goose_db_version`) and never double-apply. `00001_init.sql` intentionally contains only `trip_events` / `alerts` (identical to the `gokturk-core` schema); `00002_nhi.sql` adds the NHI/graph tables (`nhi_identities`, `nhi_edges`) after the Sprint 0 decision.
 
 ---
 
 ## v0.1 Definition of Done
 
-| # | Item | Status |
+| # | Madde | Durum |
 | :---: | :--- | :--- |
-| 1 | Inventory + relationship graph can be built | ✅ `scripts/demo.sh` step 1 |
-| 2 | Blast radius readable from the API | ✅ step 2 |
-| 3 | Decoy NHI usage → alert in ≤5 s | ✅ step 4 (instant) |
-| 4 | Legitimate NHI usage → no alert | ✅ step 3 |
-| 5 | `go test -race` green, coverage ≥ 70% | ✅ 83.5% in CI |
-| 6 | README + threat model + demo GIF | threat model ✅, GIF [#4](../../issues/4) |
-| 7 | CI can block PRs | ✅ branch protection enabled |
-
-## Branch & PR Rules
-
-`main` is protected: no direct pushes, PR + green CI required, squash-only merges.
+| 1 | Envanter + ilişki grafiği kurulabiliyor | ✅ `scripts/demo.sh` adım 1 |
+| 2 | Blast-radius API'den okunabiliyor | ✅ adım 2 |
+| 3 | Sahte NHI kullanımı → ≤5 sn'de alarm | ✅ adım 4 (anlık) |
+| 4 | Meşru NHI kullanımı → alarm yok | ✅ adım 3 |
+| 5 | `go test -race` yeşil, kapsam ≥ %70 | ✅ CI'da %83.5 |
+| 6 | README + tehdit modeli + demo GIF | tehdit modeli ✅, GIF [#4](../../issues/4) |
+| 7 | CI PR'ı bloklayabiliyor | ✅ branch koruması açık |
 
 ---
 
-## Göktürk Security Platform
+## Göktürk Güvenlik Platformu
 
-| Pillar | Repository | Focus |
+| Katman | Depo | Odak |
 | :---: | :--- | :--- |
-| **Core** | [**`gokturk-core`**](https://github.com/GokturkFK/gokturk-core) | Frozen `trap` wire contract & deterministic `correlate` engine |
-| **P1** | [**`gokturk-deception-mesh`**](https://github.com/GokturkFK/gokturk-deception-mesh) | Credential canaries, SSH sensor, NATS JetStream & unified SOC dashboard |
-| **P2** | [**`gokkalkan`**](https://github.com/GokturkFK/gokkalkan) | Agentic AI runtime security — MCP egress proxy & agent honeypot |
-| **P3** | **`gokzincir`** *(this repo)* | Non-Human Identity (NHI) governance & blast-radius graph |
+| **Çekirdek** | [**`gokturk-core`**](https://github.com/GokturkFK/gokturk-core) | Dondurulmuş `trap` sözleşmesi & belirlenimci `correlate` motoru |
+| **P1** | [**`gokturk-deception-mesh`**](https://github.com/GokturkFK/gokturk-deception-mesh) | Kimlik kanaryaları, SSH sensörü, NATS JetStream & birleşik SOC paneli |
+| **P2** | [**`gokkalkan`**](https://github.com/GokturkFK/gokkalkan) | Ajan tabanlı yapay zekâ güvenliği — MCP egress proxy & ajan honeypot |
+| **P3** | **`gokzincir`** *(bu depo)* | İnsan-olmayan kimlik (NHI) yönetişimi & blast-radius grafiği |
+
+---
+
+<a id="-english"></a>
+
+<details>
+<summary><b>🇬🇧 English</b> — click to expand</summary>
+
+<br/>
+
+## Overview
+
+**GÖKZİNCİR** (Pillar 3 of the Göktürk Security Platform) combines **Non-Human Identity (NHI) governance** with **stealth deception**:
+- **Blast-Radius Graph:** Inventories service accounts, tokens, and machine identities (`nhi_identities`, `nhi_edges`) to compute true compromise reachability.
+- **Stealth Decoy Seeding:** Automatically plants distribution-matched decoy NHIs after the first inventory pass. Decoy IDs are never returned by read APIs.
+- **Zero-FP Detection:** Benign usage raises zero alerts; touching a decoy raises an instant `T1078.004` **Critical** alert via [`gokturk-core`](https://github.com/GokturkFK/gokturk-core) (83.5% test coverage in CI).
+
+## Quickstart
+
+```sh
+cp deployments/docker/.env.example deployments/docker/.env
+make docker-up          # Postgres :5434, NATS :4224/8224
+./scripts/demo.sh
+```
+
+</details>
 
 ---
 
 <div align="center">
-  <sub>Developed by <a href="https://github.com/GokturkFK">GokturkFK</a> · Security Kernel: <a href="https://github.com/fetihcakmak">@fetihcakmak</a> · Platform/DevOps: <a href="https://github.com/uzunkubra50">@uzunkubra50</a></sub>
+  <sub><a href="https://github.com/GokturkFK">GokturkFK</a> · Güvenlik Çekirdeği: <a href="https://github.com/fetihcakmak">@fetihcakmak</a> · Platform/DevOps: <a href="https://github.com/uzunkubra50">@uzunkubra50</a></sub>
 </div>
